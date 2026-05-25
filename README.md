@@ -156,7 +156,3 @@ Q (Quadrature)
 
 Total: 16 points (4×4 grid)
 Each point = one of 16 possible 4-bit patterns
-
-📈 Expected Results
-SNR (dB)Simulated BERTheoretical BERInterpretation0~0.460.47Heavy noise, ~46% errors5~0.160.16Moderate noise, ~16% errors10~0.0130.014Light noise, ~1.3% errors15~0.000010.0002Very clean, <0.001% errors20<0.00001<0.00001Excellent, negligible errors
-Key insight: BER improves exponentially with SNR!
