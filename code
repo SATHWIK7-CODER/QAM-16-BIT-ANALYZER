@@ -1,0 +1,270 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.special import erfc
+
+# ─────────────────────────────────────────
+# STAGE 2: Bit Stream & Symbol Mapping
+# ─────────────────────────────────────────
+
+# Step 1: Generate random bits
+# QPSK uses 2 bits per symbol → 4 symbols total
+num_symbols     = 1000
+bits_per_symbol = 2          # QPSK = 2 bits per symbol
+total_bits      = num_symbols * bits_per_symbol
+
+bit_stream = np.random.randint(0, 2, total_bits)
+print(f"Total bits generated : {len(bit_stream)}")
+print(f"First 8 bits         : {bit_stream[:8]}")
+
+# Step 2: Group bits into chunks of 2
+bit_groups = bit_stream.reshape(-1, bits_per_symbol)
+print(f"\nFirst 4 groups of bits:\n{bit_groups[:4]}")
+
+# Step 3: Convert each 2-bit group to decimal index (0–3)
+# 00 → 0,  01 → 1,  10 → 2,  11 → 3
+symbol_indices = bit_groups.dot(2**np.arange(bits_per_symbol - 1, -1, -1))
+print(f"\nFirst 4 symbol indices: {symbol_indices[:4]}")
+
+# Step 4: Build the QPSK constellation map
+# 4 symbols placed at 45°, 135°, 225°, 315° on unit circle
+# Using Gray coding: 00, 01, 11, 10
+# Symbol formula: e^(j * angle) = cos(angle) + j*sin(angle)
+angles      = [45, 135, 225, 315]           # degrees
+angles_rad  = np.deg2rad(angles)            # convert to radians
+constellation = np.array([
+    np.cos(a) + 1j * np.sin(a) for a in angles_rad
+])
+
+print(f"\nConstellation map (all 4 symbols):")
+print(f"  Index 0 → bits 00 → {constellation[0].real:+.3f} + {constellation[0].imag:+.3f}j  (45°)")
+print(f"  Index 1 → bits 01 → {constellation[1].real:+.3f} + {constellation[1].imag:+.3f}j  (135°)")
+print(f"  Index 2 → bits 10 → {constellation[2].real:+.3f} + {constellation[2].imag:+.3f}j  (225°)")
+print(f"  Index 3 → bits 11 → {constellation[3].real:+.3f} + {constellation[3].imag:+.3f}j  (315°)")
+
+# Step 5: Map each symbol index to its complex symbol
+tx_symbols = constellation[symbol_indices]
+print(f"\nFirst 4 transmitted symbols: {tx_symbols[:4].round(3)}")
+
+
+# ─────────────────────────────────────────
+# STAGE 3: Constellation Diagram (Clean)
+# ─────────────────────────────────────────
+
+fig, ax = plt.subplots(figsize=(7, 7))
+fig.patch.set_facecolor('#0f0f1a')
+ax.set_facecolor('#0f0f1a')
+
+# Plot transmitted symbols
+ax.scatter(tx_symbols.real, tx_symbols.imag,
+           color='#00ffcc', s=20, alpha=0.4, label='Transmitted Symbols')
+
+# Plot ideal constellation points
+ax.scatter(constellation.real, constellation.imag,
+           color='#ff4444', s=200, marker='*', linewidths=2,
+           label='Ideal Points', zorder=5)
+
+# Label each ideal point with bit pattern
+labels = ['00', '01', '10', '11']
+offsets = [(0.1, 0.1), (-0.25, 0.1), (-0.25, -0.15), (0.1, -0.15)]
+for idx, (sym, lbl, off) in enumerate(zip(constellation, labels, offsets)):
+    ax.annotate(f"{lbl}\n({idx})",
+                xy=(sym.real, sym.imag),
+                xytext=(sym.real + off[0], sym.imag + off[1]),
+                color='white', fontsize=9, fontweight='bold')
+
+# Draw unit circle
+theta = np.linspace(0, 2*np.pi, 300)
+ax.plot(np.cos(theta), np.sin(theta),
+        color='#555577', linewidth=1, linestyle='--', label='Unit Circle')
+
+# Draw decision boundary axes
+ax.axhline(0, color='#888899', linewidth=1, linestyle='--')
+ax.axvline(0, color='#888899', linewidth=1, linestyle='--')
+
+# Labels & styling
+ax.set_xlabel('In-Phase (I)', color='white', fontsize=12)
+ax.set_ylabel('Quadrature (Q)', color='white', fontsize=12)
+ax.set_title('QPSK Constellation Diagram\n(No Noise)', color='white', fontsize=14)
+ax.tick_params(colors='white')
+ax.set_xlim(-2, 2)
+ax.set_ylim(-2, 2)
+ax.legend(facecolor='#1a1a2e', labelcolor='white', fontsize=9)
+
+for spine in ax.spines.values():
+    spine.set_edgecolor('#333355')
+
+plt.tight_layout()
+plt.savefig('qpsk_constellation_clean.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("\nPlot saved → qpsk_constellation_clean.png")
+
+
+# ─────────────────────────────────────────
+# STAGE 4: AWGN Noise + Demodulation
+# ─────────────────────────────────────────
+
+# Step 1: Set SNR
+SNR_dB     = 10            # try 5, 10, 15, 20
+SNR_linear = 10 ** (SNR_dB / 10)
+
+# Step 2: Signal & noise power
+# QPSK symbols sit on unit circle → power = 1
+signal_power = np.mean(np.abs(constellation)**2)
+noise_power  = signal_power / SNR_linear
+
+# Step 3: Generate complex AWGN noise
+noise = (np.sqrt(noise_power / 2)) * (
+    np.random.randn(num_symbols) +
+    1j * np.random.randn(num_symbols)
+)
+
+# Step 4: Add noise to transmitted symbols
+rx_symbols = tx_symbols + noise
+
+print(f"\nSNR           : {SNR_dB} dB")
+print(f"Signal Power  : {signal_power:.4f}")
+print(f"Noise Power   : {noise_power:.4f}")
+print(f"\nFirst 4 transmitted : {tx_symbols[:4].round(3)}")
+print(f"First 4 received    : {rx_symbols[:4].round(3)}")
+
+# Step 5: Demodulation — nearest neighbour
+# For QPSK this is simply checking the quadrant of the received symbol
+decoded_indices = np.array([
+    np.argmin(np.abs(rx - constellation)) for rx in rx_symbols
+])
+decoded_symbols = constellation[decoded_indices]
+
+# Step 6: BER calculation
+decoded_bits = np.array([
+    list(map(int, format(idx, '02b')))   # 2-bit for QPSK
+    for idx in decoded_indices
+]).flatten()
+
+errors = np.sum(bit_stream != decoded_bits)
+ber    = errors / total_bits
+print(f"\nBit Errors    : {errors} / {total_bits}")
+print(f"BER           : {ber:.6f}")
+
+# Plot: Clean vs Noisy side by side
+fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+fig.patch.set_facecolor('#0f0f1a')
+
+titles    = ['Transmitted (No Noise)', f'Received (SNR = {SNR_dB} dB)']
+syms_list = [tx_symbols, rx_symbols]
+
+for ax, syms, title in zip(axes, syms_list, titles):
+    ax.set_facecolor('#0f0f1a')
+
+    # Symbols
+    ax.scatter(syms.real, syms.imag,
+               color='#00ffcc', s=15, alpha=0.4)
+
+    # Ideal points
+    ax.scatter(constellation.real, constellation.imag,
+               color='#ff4444', s=200, marker='*', zorder=5)
+
+    # Unit circle
+    ax.plot(np.cos(theta), np.sin(theta),
+            color='#555577', linewidth=1, linestyle='--')
+
+    # Decision boundaries
+    ax.axhline(0, color='#888899', linewidth=1, linestyle='--')
+    ax.axvline(0, color='#888899', linewidth=1, linestyle='--')
+
+    # Quadrant labels
+    for lbl, (x, y) in zip(['Q1\n01', 'Q2\n00', 'Q3\n11', 'Q4\n10'],
+                            [(1.3, 1.3), (-1.6, 1.3), (-1.6, -1.5), (1.3, -1.5)]):
+        ax.text(x, y, lbl, color='#666688', fontsize=8, ha='center')
+
+    ax.set_title(title, color='white', fontsize=13)
+    ax.set_xlabel('In-Phase (I)', color='white')
+    ax.set_ylabel('Quadrature (Q)', color='white')
+    ax.tick_params(colors='white')
+    ax.set_xlim(-2, 2)
+    ax.set_ylim(-2, 2)
+
+    for spine in ax.spines.values():
+        spine.set_edgecolor('#333355')
+
+fig.suptitle('QPSK — Effect of AWGN Noise', color='white', fontsize=15)
+plt.tight_layout()
+plt.savefig('qpsk_constellation_noisy.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("Plot saved → qpsk_constellation_noisy.png")
+
+
+# ─────────────────────────────────────────
+# STAGE 5: BER vs SNR Curve
+# ─────────────────────────────────────────
+
+snr_db_range  = np.arange(0, 21, 1)
+simulated_ber = []
+
+print("\nSimulating BER vs SNR...")
+print(f"{'SNR (dB)':<12} {'Errors':<10} {'BER':<12}")
+print("-" * 35)
+
+for snr_db in snr_db_range:
+
+    snr_linear  = 10 ** (snr_db / 10)
+    noise_power = signal_power / snr_linear
+
+    noise = (np.sqrt(noise_power / 2)) * (
+        np.random.randn(num_symbols) +
+        1j * np.random.randn(num_symbols)
+    )
+
+    rx = tx_symbols + noise
+
+    dec_indices = np.array([
+        np.argmin(np.abs(s - constellation)) for s in rx
+    ])
+
+    dec_bits = np.array([
+        list(map(int, format(idx, '02b')))   # 2-bit for QPSK
+        for idx in dec_indices
+    ]).flatten()
+
+    errors = np.sum(bit_stream != dec_bits)
+    ber    = errors / total_bits
+    simulated_ber.append(ber)
+
+    print(f"{snr_db:<12} {errors:<10} {ber:<12.6f}")
+
+# Theoretical BER for QPSK
+# BER = (1/2) * erfc(sqrt(Eb/N0))
+# For QPSK: Eb/N0 = SNR_linear / 2 (since 2 bits per symbol)
+snr_linear_range = 10 ** (snr_db_range / 10)
+eb_n0            = snr_linear_range / bits_per_symbol
+theoretical_ber  = 0.5 * erfc(np.sqrt(eb_n0))
+
+# Plot: BER vs SNR
+fig, ax = plt.subplots(figsize=(9, 6))
+fig.patch.set_facecolor('#0f0f1a')
+ax.set_facecolor('#0f0f1a')
+
+ax.semilogy(snr_db_range, simulated_ber,
+            color='#00ffcc', marker='o', linewidth=2,
+            markersize=6, label='Simulated BER')
+
+ax.semilogy(snr_db_range, theoretical_ber,
+            color='#ff4444', linestyle='--', linewidth=2,
+            label='Theoretical BER')
+
+ax.set_xlabel('SNR (dB)', color='white', fontsize=12)
+ax.set_ylabel('Bit Error Rate (BER)', color='white', fontsize=12)
+ax.set_title('QPSK — BER vs SNR Curve', color='white', fontsize=14)
+ax.tick_params(colors='white')
+ax.legend(facecolor='#1a1a2e', labelcolor='white', fontsize=10)
+ax.grid(True, which='both', color='#333355', linestyle='--', linewidth=0.6)
+ax.set_xlim(0, 20)
+ax.set_ylim(1e-5, 1)
+
+for spine in ax.spines.values():
+    spine.set_edgecolor('#333355')
+
+plt.tight_layout()
+plt.savefig('qpsk_ber_vs_snr.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("\nPlot saved → qpsk_ber_vs_snr.png")
+print("\n✅ QPSK Transceiver Complete!")
