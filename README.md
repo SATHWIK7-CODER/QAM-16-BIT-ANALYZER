@@ -65,47 +65,6 @@ File → Open → select qam_analyzer.py
 Press F5
 
 
-📊 Expected Output
-When you run the code, you'll see:
-Console Output:
-Total bits generated : 4000
-First 16 bits        : [1 0 1 0 0 1 1 1 0 0 1 1 1 1 0 1]
-
-First 4 groups of bits:
-[[1 0 1 0]
- [0 1 1 1]
- [0 0 1 1]
- [1 1 0 1]]
-
-First 4 symbol indices: [10  7  3 13]
-
-SNR           : 15 dB
-Signal Power  : 1.00
-Noise Power   : 0.0315
-
-Bit Errors    : 0 / 4000
-BER           : 0.000000
-
-Simulating BER vs SNR...
-SNR (dB)     Errors     BER
-------------------------------------
-0            1843       0.460750
-5            621        0.155250
-10           52         0.013000
-15           0          0.000000
-20           0          0.000000
-...
-
-Plot saved → constellation_clean.png
-Plot saved → constellation_noisy.png
-Plot saved → ber_vs_snr.png
-Generated Files:
-
-constellation_clean.png → 16 ideal symbols
-constellation_noisy.png → Clean vs noisy side-by-side
-ber_vs_snr.png → BER curve log-scale plot
-
-
 📐 Mathematical Foundation
 Signal Model (AWGN Channel)
 r(t) = s(t) + n(t)
